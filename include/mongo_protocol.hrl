@@ -56,3 +56,10 @@
 	cursorid :: cursorid(),
 	startingfrom :: integer(),
 	documents :: [bson:document()] }).
+
+-record (gfs_file, {
+	docid, 
+	filename,
+	collection :: collection(),
+	singleremove = false :: boolean(),
+	selector :: selector() }).

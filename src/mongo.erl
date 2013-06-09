@@ -8,7 +8,8 @@
 	update/4,
 	update/5,
 	delete/2,
-	delete_one/2
+	delete_one/2,
+	delete_file/2
 ]).
 -export([
 	find_one/2,
@@ -30,6 +31,7 @@
 % TODO: add auth/2
 
 -include("mongo_protocol.hrl").
+-include("log.hrl").
 
 -type connection() :: pid().
 -type database()   :: atom().
@@ -102,6 +104,19 @@ delete(Coll, Selector) ->
 -spec delete_one (collection(), selector()) -> ok.
 delete_one(Coll, Selector) ->
 	write(#delete{collection = Coll, singleremove = true, selector = Selector}).
+
+%% @doc Delete first selected file.
+-spec delete_file (collection(), selector()) -> ok.
+delete_file(Coll, Selector) ->
+	case Selector#gfs_file.docid of
+		undefined ->
+			find_file(Coll, Selector);
+		_ ->
+			GirdFiles = get_gird_files_name(Coll),
+			GirdChunks = get_gird_chunks_name(Coll),
+			write(#delete{collection = GirdFiles,singleremove = true,selector = {'_id',{Selector#gfs_file.docid}}}),
+			write(#delete{collection = GirdChunks,singleremove = true,selector = {'_id',{Selector#gfs_file.docid}}})
+	end.
 
 %% @doc Return first selected document, if any
 -spec find_one(collection(), selector()) -> {} | {bson:document()}.
@@ -272,3 +287,22 @@ read_one(Request) ->
 		[Doc | _] -> {Doc}
 	end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%
+find_file(Coll, Selector) ->
+	GirdColl = get_gird_files_name(Coll),
+	case find_one(GirdColl, {}, Selector) of
+		{} ->
+			?INFO_F("~p not found,Selector:~p ~n",[?MODULE,Selector]),
+			{error,not_found};
+		{Doc} ->
+			{{DocId}} = bson:lookup('_id',Doc),
+			delete_file(Coll,#gfs_file{docid = DocId})
+	end.
+
+get_gird_files_name(Coll) ->
+	Temp = erlang:atom_to_list(Coll) ++ ".files",
+	erlang:list_to_atom(Temp).
+
+get_gird_chunks_name(Coll) ->
+	Temp = erlang:atom_to_list(Coll) ++ ".chunks",
+	erlang:list_to_atom(Temp).
